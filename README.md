@@ -40,8 +40,6 @@ PromptGuard/
 │   ├── repositories/         # Data access: LogRepository (Mongo)
 │   └── services/             # Business logic: rule_engine, security_service
 ├── ui/                       # Streamlit dashboard package
-│   ├── __init__.py           # run() helper and package exports
-│   ├── __main__.py           # `python -m ui` entrypoint
 │   ├── dashboard.py          # Streamlit app
 │   └── components.py         # Shared UI components & client
 ├── run_ui.py                 # Optional helper to run the UI using venv Python
@@ -143,7 +141,7 @@ Start the frontend (Streamlit SOC dashboard):
 streamlit run ui/dashboard.py --server.port 8501 --server.address 0.0.0.0
 ```
 
-Alternative ways to launch the UI (venv-friendly):
+<!-- Alternative ways to launch the UI (venv-friendly):
 
 - Using the helper script (ensures correct Python executable in venv):
 
@@ -157,7 +155,7 @@ python run_ui.py
 python -m ui
 ```
 
-> Note: `streamlit run ui` does not directly execute a package `__init__` file; prefer `streamlit run ui/dashboard.py` or `python run_ui.py`.
+> Note: `streamlit run ui` does not directly execute a package `__init__` file; prefer `streamlit run ui/dashboard.py` or `python run_ui.py`. -->
 
 ---
 
