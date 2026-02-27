@@ -1,136 +1,152 @@
 import os
 import sys
+import time
+from datetime import datetime
+from typing import Optional
+
 import streamlit as st
 import pandas as pd
-from pymongo import MongoClient
-import requests
+import altair as alt
 
-# Ensure project root is on sys.path so `app` package imports work when
-# Streamlit runs this file directly.
+try:
+    from streamlit_option_menu import option_menu
+except ImportError:
+    option_menu = None
+
+# 1. PATH CONFIG
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
 from app.core import config
-
-# --- Setup & Configuration ---
-MONGO_URL = config.MONGO_URL
-API_URL = f"{config.api_base_url()}/evaluate"
-
-st.set_page_config(
-    page_title="PromptGuard Security Center",
-    page_icon="🛡️",
-    layout="wide",
-    initial_sidebar_state="expanded"
+from ui.components import (
+    BackendClient, fetch_summary_cached, kpi_cards,
+    render_time_series, render_donut_and_vectors,
+    render_logs_table, offline_screen, SOC_THEME
 )
 
-# Custom CSS
-st.markdown("""
-    <style>
-    .stMetric { background-color: #1E1E1E; padding: 15px; border-radius: 8px; border-left: 5px solid #00FF00; }
-    .metric-blocked { border-left-color: #FF0000; }
-    .metric-suspicious { border-left-color: #FFA500; }
-    </style>
-""", unsafe_allow_html=True)
+# 2. THEME & SESSION INITIALIZATION
+st.set_page_config(page_title="PromptGuard SOC", page_icon="🛡️", layout="wide")
+st.markdown(SOC_THEME, unsafe_allow_html=True)
 
-# --- Database Connection ---
-@st.cache_resource
-def init_connection():
-    return MongoClient(MONGO_URL)
+if "console_history" not in st.session_state:
+    st.session_state.console_history = []
 
-client = init_connection()
-db = client.promptguard_db
-threat_logs = db.threat_logs
+# 3. BACKEND INIT
+API_BASE = config.api_base_url()
+client = BackendClient(f"{API_BASE}/v1")
 
-def fetch_logs():
-    cursor = threat_logs.find({}, {"_id": 0}).sort("timestamp", -1).limit(100)
-    data = list(cursor)
-    return pd.DataFrame(data) if data else pd.DataFrame()
+# 4. SIDEBAR (Health & Config)
+def render_sidebar():
+    with st.sidebar:
+        st.image("https://img.icons8.com/fluency/96/shield.png", width=80)
+        st.title("Cyber Intelligence")
 
-# --- App Layout ---
-st.title("🛡️ PromptGuard Hybrid Firewall")
-st.markdown("### Powered by AMD Ryzen Edge & Instinct Cloud Architectures")
+        # Health Check
+        summary = fetch_summary_cached(f"{API_BASE}/v1")
+        is_online = bool(summary)
 
-# Create Tabs
-tab1, tab2 = st.tabs(["📊 Security Center (Monitoring)", "⚔️ Attack Sandbox (Interactive Testing)"])
+        status_color = "green" if is_online else "red"
+        st.markdown(f"**System Status:** <span style='color:{status_color}'>{'● ONLINE' if is_online else '● OFFLINE'}</span>", unsafe_allow_html=True)
 
-with tab1:
-    df = fetch_logs()
+        if is_online:
+            st.success(f"LLM Node: {summary.get('llm_status', 'Active')}")
 
-    if df.empty:
-        st.info("No threat logs found. Go to the Attack Sandbox to fire some prompts!")
-    else:
-        total_scans = len(df)
-        total_blocked = len(df[df['verdict'] == 'MALICIOUS'])
-        total_suspicious = len(df[df['verdict'] == 'SUSPICIOUS'])
-        avg_latency = df['latency_ms'].mean() if 'latency_ms' in df.columns else 0
+        st.divider()
+        st.subheader("Console Settings")
+        limit = st.select_slider("Log Buffer", options=[50, 100, 250, 500], value=100)
+        auto_refresh = st.toggle("Live Feed", value=True)
 
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("Total Prompts Scanned", total_scans)
-        with col2:
-            st.markdown('<div class="metric-blocked">', unsafe_allow_html=True)
-            st.metric("Threats Blocked", total_blocked)
-            st.markdown('</div>', unsafe_allow_html=True)
-        with col3:
-            st.markdown('<div class="metric-suspicious">', unsafe_allow_html=True)
-            st.metric("Suspicious Activity", total_suspicious)
-            st.markdown('</div>', unsafe_allow_html=True)
-        with col4:
-            st.metric("Avg Latency (ms)", f"{avg_latency:.0f}")
+        if st.button("Clear Cache & Reload", use_container_width=True):
+            st.cache_data.clear()
+            st.rerun()
 
-        st.markdown("---")
-        st.subheader("🔴 Live Threat Log")
-        display_df = df.copy()
-        if 'timestamp' in display_df.columns:
-            display_df['timestamp'] = pd.to_datetime(display_df['timestamp']).dt.strftime('%H:%M:%S')
-        cols_to_show = ['timestamp', 'verdict', 'threat_type', 'final_score', 'raw_prompt', 'sentinel_action']
-        existing_cols = [col for col in cols_to_show if col in display_df.columns]
+        return limit, auto_refresh
 
-        def color_verdict(val):
-            color = '#00FF00' if val == 'SAFE' else '#FF0000' if val == 'MALICIOUS' else '#FFA500'
-            return f'color: {color}; font-weight: bold'
+log_limit, auto_refresh_on = render_sidebar()
 
-        st.dataframe(
-            display_df[existing_cols].style.map(color_verdict, subset=['verdict']),
-            use_container_width=True,
-            hide_index=True
-        )
+# 5. HEADER & NAVIGATION
+st.title("🛡️ PromptGuard Security Operations")
+if option_menu:
+    selected = option_menu(
+        menu_title=None,
+        options=["Threat Dashboard", "AI Research Lab"],
+        icons=["activity", "terminal"],
+        orientation="horizontal",
+        styles={"container": {"background-color": "#0b101b"}}
+    )
+else:
+    selected = st.radio("Mode", ["Threat Dashboard", "AI Research Lab"], horizontal=True)
 
-with tab2:
-    st.markdown("Test your prompts against the PromptGuard engine in real-time. Watch the Sentinel Blue Team learn and adapt.")
-    with st.form("attack_form"):
-        user_prompt = st.text_area("Enter your prompt (Safe or Malicious):", height=150, placeholder="e.g., SELECT email, password FROM users --")
-        submit_button = st.form_submit_button("🔥 Fire Prompt at Engine")
+# 6. DASHBOARD PAGE
+def show_dashboard():
+    # Fetch Data
+    raw_logs = client.fetch_data("logs", params={"limit": log_limit})
+    if raw_logs is None:
+        offline_screen(retry_callback=st.rerun)
+        return
 
-    if submit_button and user_prompt:
-        with st.spinner("Analyzing prompt via Hybrid Engine..."):
-            try:
-                response = requests.post(API_URL, json={"session_id": "demo_user", "prompt": user_prompt})
-                if response.status_code == 200:
-                    data = response.json()
-                    if data["verdict"] == "MALICIOUS":
-                        st.error(f"🛑 BLOCKED: {data['threat_type']} (Score: {data['final_score']})")
-                    elif data["verdict"] == "SUSPICIOUS":
-                        st.warning(f"⚠️ FLAGGED: {data['threat_type']} (Score: {data['final_score']})")
-                    else:
-                        st.success(f"✅ PASSED: Safe Request (Score: {data['final_score']})")
-                    if "patched" in data.get("sentinel_action", "").lower():
-                        st.info(f"🛡️ SENTINEL ACTION: {data['sentinel_action']}")
-                    elif "immunized" in data.get("sentinel_action", "").lower():
-                        st.success(f"🛡️ SENTINEL EDGE CACHE: {data['sentinel_action']}")
-                    st.markdown("### Raw Engine Output")
-                    st.json(data)
-                else:
-                    st.error(f"API Error: {response.status_code}")
-            except requests.exceptions.ConnectionError:
-                st.error("Failed to connect to the backend. Is your FastAPI server running?")
+    df = pd.DataFrame(raw_logs)
 
-with st.sidebar:
-    st.header("Control Panel")
-    if st.button("🔄 Refresh Dashboard"):
-        st.rerun()
-    st.markdown("### Architecture Status")
-    st.success("Edge Cache (Ryzen): ONLINE")
-    st.success("Cloud LLM (Instinct): ONLINE")
-    st.success("Sentinel Blue Team: ACTIVE")
+    # KPI Row
+    kpi_cards(df)
+
+    # Timeline
+    render_time_series(df)
+
+    # Distribution Rows
+    render_donut_and_vectors(df)
+
+    # Forensic Table
+    render_logs_table(df)
+
+# 7. CONSOLE PAGE (The Lab)
+def show_console():
+    st.markdown("### 🧪 Prompt Injection Sandbox")
+    st.caption("Execute adversarial payloads to validate firewall heuristics and LLM risk scoring.")
+
+    with st.container(border=True):
+        prompt_input = st.text_area("Adversarial Payload", height=180, placeholder="Enter prompt to test...")
+        c1, c2 = st.columns([1, 5])
+        if c1.button("Analyze Payload", type="primary", use_container_width=True):
+            if prompt_input:
+                with st.spinner("Analyzing semantics..."):
+                    result = client.evaluate(prompt_input)
+                    if result:
+                        st.session_state.console_history.insert(0, {
+                            "timestamp": datetime.now().strftime("%H:%M:%S"),
+                            "input": prompt_input,
+                            "output": result
+                        })
+            else:
+                st.warning("Payload empty.")
+
+    # Results Display
+    if st.session_state.console_history:
+        latest = st.session_state.console_history[0]
+        res = latest['output']
+
+        # Risk Gauge Header
+        score = res.get('final_score', 0.0)
+        verdict = res.get('verdict', 'SAFE')
+        v_color = "#ff4b4b" if verdict == "MALICIOUS" else "#ffa113" if verdict == "SUSPICIOUS" else "#00e5ff"
+
+        st.markdown(f"### Current Result: <span style='color:{v_color}'>{verdict} ({score:.2f})</span>", unsafe_allow_html=True)
+
+        col_a, col_b = st.columns(2)
+        with col_a:
+            st.info(f"**Reasoning:**\n\n{res.get('reasoning', 'N/A')}")
+        with col_b:
+            with st.expander("Safe Output / Sanitized View", expanded=True):
+                st.code(res.get("safe_prompt", "N/A"), language="text")
+
+# 8. MAIN EXECUTION
+if "Dashboard" in selected:
+    show_dashboard()
+else:
+    show_console()
+
+# 9. AUTO-REFRESH LOGIC (Non-blocking)
+if auto_refresh_on and "Dashboard" in selected:
+    time.sleep(10)
+    st.rerun()
