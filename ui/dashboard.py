@@ -1,12 +1,21 @@
+import os
+import sys
 import streamlit as st
 import pandas as pd
 from pymongo import MongoClient
 import requests
+
+# Ensure project root is on sys.path so `app` package imports work when
+# Streamlit runs this file directly.
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+
 from app.core import config
 
 # --- Setup & Configuration ---
 MONGO_URL = config.MONGO_URL
-API_URL = "http://localhost:8000/evaluate"
+API_URL = f"{config.api_base_url()}/evaluate"
 
 st.set_page_config(
     page_title="PromptGuard Security Center",
