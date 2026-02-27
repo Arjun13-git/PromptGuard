@@ -1,14 +1,85 @@
-# Environments
+# ---- Virtual environments ----
+.venv/
 venv/
 env/
+ENV/
+env.bak/
+venv.bak/
+
+# ---- dotenv / local env files ----
 .env
+.env.*
 
-# Python Cache
+# ---- Python bytecode / cache ----
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
 
-# OS Files
+# ---- Distribution / packaging ----
+build/
+dist/
+*.egg-info/
+*.egg
+*.whl
+pip-wheel-metadata/
+share/python-wheels/
+
+# ---- Installer / logs ----
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ---- Test, coverage and profiling ----
+.pytest_cache/
+.tox/
+.nox/
+.cache
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+hypothesis/
+
+# ---- IDEs / editors ----
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# ---- PyCharm ----
+*.iml
+*.iws
+out/
+
+# ---- OS files ----
 .DS_Store
 Thumbs.db
+
+# ---- Jupyter ----
+.ipynb_checkpoints/
+
+# ---- Type checkers / linters ----
+.mypy_cache/
+.pyre/
+
+# ---- Databases / local data ----
+*.sqlite3
+*.db
+
+# ---- Logs ----
+logs/
+*.log
+
+# ---- Secrets / keys / certs ----
+*.pem
+*.key
+*.crt
+secrets.json
+
+# ---- Local overrides / temp files ----
+.local/
+*.env.local
+*.swp
+
+# ---- Misc ----
+node_modules/
+venv/
