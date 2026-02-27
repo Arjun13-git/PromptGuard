@@ -88,6 +88,10 @@ def show_dashboard():
 
     df = pd.DataFrame(raw_logs)
 
+    if df.empty:
+        st.info("🛡️ Database is empty. Fire some test payloads in the AI Research Lab to populate the dashboard!")
+        return
+
     # KPI Row
     kpi_cards(df)
 

@@ -1,7 +1,7 @@
 from typing import Optional, Dict, Any, List
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase, AsyncIOMotorCollection
 from app.core import config
-
+import certifi
 
 class LogRepository:
 	"""Data access layer for threat logs using Motor (async MongoDB client).
@@ -23,7 +23,7 @@ class LogRepository:
 		if self._client is None:
 			if not self._mongo_uri:
 				raise RuntimeError("Mongo URI not configured for LogRepository")
-			self._client = AsyncIOMotorClient(self._mongo_uri)
+			self._client = AsyncIOMotorClient(self._mongo_uri, tlsCAFile=certifi.where())
 			self._db = self._client[self._db_name]
 			self._collection = self._db[self._collection_name]
 

@@ -24,8 +24,8 @@ app.add_middleware(
 
 
 # Include routers
-app.include_router(stats.router, prefix="", tags=["stats"])
-app.include_router(shield.router, prefix="", tags=["shield"])
+app.include_router(stats.router, prefix="/v1", tags=["stats"])
+app.include_router(shield.router, prefix="/v1", tags=["shield"])
 
 
 @app.on_event("startup")
